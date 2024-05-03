@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+<body>
+    <h1>Upload an image</h1>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" name="file" id="file">
+        <button type="button" onclick="uploadImage()">Predict Age</button>
+    </form>
+    <h2 id="result"></h2>
+
+    <script>
+        function uploadImage() {
+            var formData = new FormData();
+            formData.append('file', $('#file')[0].files[0]);
+
+            $.ajax({
+                url: '/predict',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(data) {
+                    if(data.error) {
+                        $('#result').text('Error: ' + data.error);
+                    } else {
+                        $('#result').text('Predicted Age: ' + data.predicted_age);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#result').text('An error occurred: ' + error);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
