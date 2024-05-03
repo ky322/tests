@@ -8,7 +8,7 @@
     <h1>Play Against Model</h1>
     <div>
         <h2>Guess the Age:</h2>
-        <img id="image" src="" alt="Image">
+        <img id="image" src="{{ image_url }}" alt="Image">
         <input type="number" id="guess" placeholder="Enter your guess">
         <button onclick="submitGuess()">Submit Guess</button>
     </div>
@@ -20,7 +20,7 @@
             $.ajax({
                 url: '/play',
                 type: 'POST',
-                data: { guess: guess },
+                data: { guess: guess, image_url: $('#image').attr('src') }, // Pass image URL back to server
                 success: function(data) {
                     $('#result').text(data.message);
                     $('#image').attr('src', data.image_url);

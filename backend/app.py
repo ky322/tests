@@ -1,4 +1,5 @@
 import os
+import random
 from flask import Flask, request, jsonify, render_template
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
@@ -15,10 +16,8 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Ensure the upload folder exists
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-    
+SMALL_DATASET_FOLDER = 'small_dataset/test/utkcropped'
+
 # Load the model
 class AgeCNN(nn.Module):
     def __init__(self):
@@ -77,19 +76,14 @@ def predict():
         return jsonify({'error': 'No selected file'})
 
     if file:
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-
         # Load the image and transform
-        image = Image.open(file_path).convert('RGB')
+        image = Image.open(file).convert('RGB')
         image = transform(image).unsqueeze(0)
 
         # Make prediction
         with torch.no_grad():
             outputs = model(image)
-            predicted_age = outputs.item()  
-        os.remove(file_path)
+            predicted_age = outputs.item()
 
         return jsonify({'predicted_age': predicted_age})
 
@@ -97,8 +91,40 @@ def predict():
 
 @app.route("/play", methods=["GET"])
 def play():
-    # TODO add counter
-    return render_template('play.html', title="Play Against Model")
+    # Get a list of all images in the small dataset folder
+    images = os.listdir(SMALL_DATASET_FOLDER)
+    # Choose a random image from the list
+    image_name = random.choice(images)
+    image_path = os.path.join(SMALL_DATASET_FOLDER, image_name)
+    # Predict the age of the image using the model
+    image = Image.open(image_path).convert('RGB')
+    image_tensor = transform(image).unsqueeze(0)
+    with torch.no_grad():
+        model_output = model(image_tensor)
+        predicted_age = int(model_output.item())
+    # Construct the image URL to pass to the template
+    image_url = f"{SMALL_DATASET_FOLDER}/{image_name}"
+    return render_template('play.html', title="Play Against Model", image_url=image_url, predicted_age=predicted_age)
+
+@app.route("/play", methods=["POST"])
+def submit_guess():
+    global points
+    user_guess = int(request.form['guess'])
+    predicted_age = int(request.form['predicted_age'])
+    difference = abs(user_guess - predicted_age)
+    if difference <= 5:  
+        points += 1
+        message = "Congratulations! You guessed close enough. You get 1 point."
+    else:
+        message = f"Sorry, the model's prediction was {predicted_age}. You were {difference} years off."
+    response = {
+        "message": message,
+        "image_url": request.form['image_url'],
+        "predicted_age": predicted_age,
+        "points": points
+    }
+    return jsonify(response)
+
 
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5000)
