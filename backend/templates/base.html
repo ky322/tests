@@ -3,14 +3,18 @@
 <head>
     <title>{{ title }}</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1>Upload an image</h1>
-    <form id="upload-form" enctype="multipart/form-data">
-        <input type="file" name="file" id="file">
+    <div class="model">
+        <h1>Upload an image</h1>
+        <form id="upload-form" enctype="multipart/form-data">
+            <input type="file" name="file" id="file">
+        </form>
         <button type="button" onclick="uploadImage()">Predict Age</button>
-    </form>
-    <h2 id="result"></h2>
+        <h2 id="result"></h2>
+        <button onclick="location.href='/play'">Play Against Model</button>
+    </div>
 
     <script>
         function uploadImage() {

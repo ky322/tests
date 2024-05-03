@@ -95,5 +95,10 @@ def predict():
 
     return jsonify({'error': 'Something went wrong'})
 
+@app.route("/play", methods=["GET"])
+def play():
+    # TODO add counter
+    return render_template('play.html', title="Play Against Model")
+
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5000)

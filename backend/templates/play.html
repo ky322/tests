@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Play Against Model</h1>
+    <div>
+        <h2>Guess the Age:</h2>
+        <img id="image" src="" alt="Image">
+        <input type="number" id="guess" placeholder="Enter your guess">
+        <button onclick="submitGuess()">Submit Guess</button>
+    </div>
+    <div id="result"></div>
+
+    <script>
+        function submitGuess() {
+            var guess = $('#guess').val();
+            $.ajax({
+                url: '/play',
+                type: 'POST',
+                data: { guess: guess },
+                success: function(data) {
+                    $('#result').text(data.message);
+                    $('#image').attr('src', data.image_url);
+                },
+                error: function(xhr, status, error) {
+                    console.error('An error occurred:', error);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
