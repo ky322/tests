@@ -1,24 +1,21 @@
 import os
 import random
-from flask import Flask, request, jsonify, render_template
-from werkzeug.utils import secure_filename
+from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS
 import torch
 from torchvision import transforms
 from PIL import Image
-import json
 import torch.nn as nn
+import base64
 
 
 app = Flask(__name__)
 CORS(app)
 
-UPLOAD_FOLDER = 'uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
+app.config['UPLOAD_FOLDER'] = 'uploads'
 SMALL_DATASET_FOLDER = 'small_dataset/test/utkcropped'
+app.config['SECRET_KEY'] = 'key'
 
-# Load the model
 class AgeCNN(nn.Module):
     def __init__(self):
         super(AgeCNN, self).__init__()
@@ -52,15 +49,10 @@ model = AgeCNN()
 model.load_state_dict(torch.load('model_weights.pth', map_location=torch.device('cpu')))
 model.eval()
 
-# Define transformations
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # Resize the image to what the model expects
-    transforms.ToTensor(),          # Convert the image to a tensor
+    transforms.Resize((224, 224)),  
+    transforms.ToTensor(),        
 ])
-
-# Path for saving uploaded files - ensure this directory exists
-UPLOAD_FOLDER = 'uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 @app.route("/", methods=["GET"])
 def home():
@@ -68,63 +60,87 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'})
-
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'})
-
     if file:
-        # Load the image and transform
         image = Image.open(file).convert('RGB')
         image = transform(image).unsqueeze(0)
-
-        # Make prediction
         with torch.no_grad():
             outputs = model(image)
             predicted_age = outputs.item()
-
         return jsonify({'predicted_age': predicted_age})
+    return 0
 
-    return jsonify({'error': 'Something went wrong'})
-
-@app.route("/play", methods=["GET"])
+@app.route("/play", methods=["GET", "POST"])
 def play():
-    # Get a list of all images in the small dataset folder
-    images = os.listdir(SMALL_DATASET_FOLDER)
-    # Choose a random image from the list
-    image_name = random.choice(images)
-    image_path = os.path.join(SMALL_DATASET_FOLDER, image_name)
-    # Predict the age of the image using the model
+    if request.method == "GET":
+        if 'image_count' not in session or session['image_count'] >= 10:
+            session['points'] = 0
+            session['image_count'] = 0
+        predicted_age, actual_age, image_url = fetch_new_image_and_age()
+
+        session['predicted_age'] = predicted_age
+        session['actual_age'] = actual_age
+        session['image_count'] += 1
+
+        return render_template('play.html', title="Play Against Model", image_url=image_url, predicted_age=predicted_age, actual_age=actual_age)
+
+    elif request.method == "POST":
+        user_guess = int(request.form['guess'])
+        predicted_age = session.get('predicted_age')
+        actual_age = session.get('actual_age')
+
+        user_difference = abs(user_guess - actual_age)
+        model_difference = abs(predicted_age - actual_age)
+
+        points = session.get('points', 0)
+        if user_difference < model_difference:
+            points += 1
+            message = f"You win. Actual: {actual_age}, Model Guess: {predicted_age}."
+        elif user_difference == model_difference:
+            message = f"Tie. Actual: {actual_age}, Model Guess: {predicted_age}."
+        else:
+            message = f"Model wins. Actual: {actual_age}, Model Guess: {predicted_age}."
+
+        session['points'] = points
+
+        response = {
+            "message": message,
+            "points": points
+        }
+        return jsonify(response)
+    
+def fetch_new_image_and_age():
+    image_path = os.path.join(SMALL_DATASET_FOLDER, random.choice(os.listdir(SMALL_DATASET_FOLDER)))
     image = Image.open(image_path).convert('RGB')
-    image_tensor = transform(image).unsqueeze(0)
+    
     with torch.no_grad():
-        model_output = model(image_tensor)
+        model_output = model(transform(image).unsqueeze(0))
         predicted_age = int(model_output.item())
-    # Construct the image URL to pass to the template
-    image_url = f"{SMALL_DATASET_FOLDER}/{image_name}"
-    return render_template('play.html', title="Play Against Model", image_url=image_url, predicted_age=predicted_age)
 
-@app.route("/play", methods=["POST"])
-def submit_guess():
-    global points
-    user_guess = int(request.form['guess'])
-    predicted_age = int(request.form['predicted_age'])
-    difference = abs(user_guess - predicted_age)
-    if difference <= 5:  
-        points += 1
-        message = "Congratulations! You guessed close enough. You get 1 point."
-    else:
-        message = f"Sorry, the model's prediction was {predicted_age}. You were {difference} years off."
-    response = {
-        "message": message,
-        "image_url": request.form['image_url'],
-        "predicted_age": predicted_age,
-        "points": points
-    }
-    return jsonify(response)
+    actual_age = int(os.path.basename(image_path).split("_")[0])
 
+    with open(image_path, "rb") as f:
+        image_url = f"data:image/jpg;base64,{base64.standard_b64encode(f.read()).decode('utf-8')}"
+
+    return predicted_age, actual_age, image_url
+ 
+@app.route("/get-new-image", methods=["GET"])
+def get_new_image():
+    if session['image_count'] >= 10:
+        score = session.get('points', 0)
+        return jsonify({'game_over': True, 'message': f"Game over. Thanks! Your Score {score}"})
+    predicted_age, actual_age, image_url = fetch_new_image_and_age()
+
+    session['predicted_age'] = predicted_age
+    session['actual_age'] = actual_age
+    session['image_count'] += 1
+
+    return jsonify({
+        'image_url': image_url,
+        'predicted_age': predicted_age,
+        'actual_age': actual_age,
+        'image_count': session['image_count']
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5000)

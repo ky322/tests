@@ -6,28 +6,43 @@
 </head>
 <body>
     <h1>Play Against Model</h1>
-    <div>
-        <h2>Guess the Age:</h2>
-        <img id="image" src="{{ image_url }}" alt="Image">
-        <input type="number" id="guess" placeholder="Enter your guess">
+    <h2>Guess the Age:</h2>
+    <img id="image" src="{{ image_url }}" alt="Image">
+    <input type="number" id="guess" placeholder="Enter your guess">
+    <div class="buttons">
         <button onclick="submitGuess()">Submit Guess</button>
+        <button onclick="getNextImage()">Next Image</button>
     </div>
     <div id="result"></div>
 
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script>
         function submitGuess() {
             var guess = $('#guess').val();
             $.ajax({
                 url: '/play',
                 type: 'POST',
-                data: { guess: guess, image_url: $('#image').attr('src') }, // Pass image URL back to server
-                success: function(data) {
-                    $('#result').text(data.message);
-                    $('#image').attr('src', data.image_url);
+                data: { guess: guess },
+                success: function(response) {
+                    $('#result').text(response.message + " Total points: " + response.points);
                 },
-                error: function(xhr, status, error) {
-                    console.error('An error occurred:', error);
-                }
+            });
+        }
+        function getNextImage() {
+            $.ajax({
+                url: '/get-new-image',
+                type: 'GET',
+                success: function(data) {
+                    if (data.game_over) {
+                        alert(data.message); 
+                        $('#guess').prop('disabled', true);
+                        $('#result').text('Game over!');
+                    } else {
+                        $('#image').attr('src', data.image_url);
+                        $('#result').text('');
+                        $('#guess').val('');
+                    }
+                },
             });
         }
     </script>

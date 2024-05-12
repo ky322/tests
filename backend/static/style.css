@@ -1,6 +1,6 @@
 @import url(https://fonts.googleapis.com/css?family=Lato:400,900);
 
-h1, h2{
+h1, h2, #result{
     font-family: 'Lato', sans-serif;
     text-align: center;
 }
@@ -13,4 +13,18 @@ button{
 form{
     display: flex;
     justify-content: center;
+}
+
+#image, input{
+    display: flex;
+    margin: auto;
+    margin-top: 20px;
+}
+.buttons{
+    display: flex;
+    flex-direction: row;
+    width: 300px;
+    margin: auto;
+    margin-top: 20px;
+    margin-bottom: 10px;
 }
