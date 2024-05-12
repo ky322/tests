@@ -13,7 +13,6 @@ app = Flask(__name__)
 CORS(app)
 
 app.config['UPLOAD_FOLDER'] = 'uploads'
-SMALL_DATASET_FOLDER = 'small_dataset/test/utkcropped'
 app.config['SECRET_KEY'] = 'key'
 
 class AgeCNN(nn.Module):
@@ -73,10 +72,17 @@ def predict():
 @app.route("/play", methods=["GET", "POST"])
 def play():
     if request.method == "GET":
-        if 'image_count' not in session or session['image_count'] >= 10:
+        if 'image_count' not in session or session['image_count'] >= 20:
             session['points'] = 0
             session['image_count'] = 0
-        predicted_age, actual_age, image_url = fetch_new_image_and_age()
+            session['user_cumulative_diff'] = 0 
+            session['model_cumulative_diff'] = 0
+            all_images = os.listdir("val_20")
+            random.shuffle(all_images)
+            session['image_list'] = all_images[:20]   
+        image_index = session['image_count']
+        img = session['image_list'][image_index]
+        predicted_age, actual_age, image_url = fetch_new_image_and_age(img)
 
         session['predicted_age'] = predicted_age
         session['actual_age'] = actual_age
@@ -92,15 +98,19 @@ def play():
         user_difference = abs(user_guess - actual_age)
         model_difference = abs(predicted_age - actual_age)
 
+        session['user_cumulative_diff'] = session.get('user_cumulative_diff', 0) + user_difference**2
+        session['model_cumulative_diff'] = session.get('model_cumulative_diff', 0) + model_difference**2
+
         points = session.get('points', 0)
         if user_difference < model_difference:
             points += 1
             message = f"You win. Actual: {actual_age}, Model Guess: {predicted_age}."
         elif user_difference == model_difference:
+            points +=1
             message = f"Tie. Actual: {actual_age}, Model Guess: {predicted_age}."
         else:
             message = f"Model wins. Actual: {actual_age}, Model Guess: {predicted_age}."
-
+        
         session['points'] = points
 
         response = {
@@ -109,8 +119,8 @@ def play():
         }
         return jsonify(response)
     
-def fetch_new_image_and_age():
-    image_path = os.path.join(SMALL_DATASET_FOLDER, random.choice(os.listdir(SMALL_DATASET_FOLDER)))
+def fetch_new_image_and_age(image_name):
+    image_path = os.path.join("val_20", image_name)
     image = Image.open(image_path).convert('RGB')
     
     with torch.no_grad():
@@ -126,10 +136,16 @@ def fetch_new_image_and_age():
  
 @app.route("/get-new-image", methods=["GET"])
 def get_new_image():
-    if session['image_count'] >= 10:
+    if session['image_count'] >= 20:
         score = session.get('points', 0)
-        return jsonify({'game_over': True, 'message': f"Game over. Thanks! Your Score {score}"})
-    predicted_age, actual_age, image_url = fetch_new_image_and_age()
+        user_rms = (session.get('user_cumulative_diff', 0) / 20)**(1/2)
+        model_rms = (session.get('model_cumulative_diff', 0) / 20)**(1/2)
+        return jsonify({
+            'game_over': True,
+            'message': f"Game over. Thanks! Your Score: {score} User: {user_rms:.2f}, Model: {model_rms:.2f}",
+        })
+    if 'image_list' in session and session['image_count'] < len(session['image_list']):
+        predicted_age, actual_age, image_url = fetch_new_image_and_age(session['image_list'][session['image_count']])
 
     session['predicted_age'] = predicted_age
     session['actual_age'] = actual_age
